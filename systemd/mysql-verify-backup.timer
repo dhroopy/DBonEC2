@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly MySQL backup restore test at 04:00 IST on Sunday
+
+[Timer]
+OnCalendar=Sun *-*-* 04:00:00
+Timezone=Asia/Kolkata
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

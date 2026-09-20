@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily MySQL full backup at 02:00 IST
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Timezone=Asia/Kolkata
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

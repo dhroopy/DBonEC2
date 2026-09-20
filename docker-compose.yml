@@ -1,0 +1,21 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: mysql84
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "3306:3306"
+    volumes:
+      - /mnt/mysql-data:/var/lib/mysql
+      - ./mysql/conf.d:/etc/mysql/conf.d:ro
+      - ./secrets:/run/mysql-secrets:ro
+      - ./scripts/container-healthcheck.sh:/usr/local/bin/container-healthcheck.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "sh /usr/local/bin/container-healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    stop_grace_period: 1m

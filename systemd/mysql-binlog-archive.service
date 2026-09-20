@@ -1,0 +1,16 @@
+[Unit]
+Description=Archive MySQL binary logs to S3
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/mysql-server
+EnvironmentFile=/opt/mysql-server/.env
+Environment=TZ=Asia/Kolkata
+ExecStart=/opt/mysql-server/scripts/archive-binlogs.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+StandardOutput=append:/opt/mysql-server/logs/binlog-archive.log
+StandardError=append:/opt/mysql-server/logs/binlog-archive.log

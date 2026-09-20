@@ -1,0 +1,11 @@
+[Unit]
+Description=Archive MySQL binary logs every 15 minutes
+
+[Timer]
+OnCalendar=*-*-* *:00,15,30,45:00
+Timezone=Asia/Kolkata
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

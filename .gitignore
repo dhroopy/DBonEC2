@@ -1,0 +1,14 @@
+.env
+secrets/*
+!secrets/.gitkeep
+!secrets/*.example
+backups/
+logs/
+state/
+*.sql
+*.sql.zst
+*.zst
+.DS_Store
+*.swp
+*.tmp
+/tmp/

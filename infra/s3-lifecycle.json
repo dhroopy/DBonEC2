@@ -1,0 +1,36 @@
+{
+  "Rules": [
+    {
+      "ID": "expire-full-backups",
+      "Filter": {
+        "Prefix": "mysql/full/"
+      },
+      "Status": "Enabled",
+      "Expiration": {
+        "Days": 14
+      },
+      "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 7
+      },
+      "AbortIncompleteMultipartUpload": {
+        "DaysAfterInitiation": 1
+      }
+    },
+    {
+      "ID": "expire-binlogs",
+      "Filter": {
+        "Prefix": "mysql/binlogs/"
+      },
+      "Status": "Enabled",
+      "Expiration": {
+        "Days": 14
+      },
+      "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 7
+      },
+      "AbortIncompleteMultipartUpload": {
+        "DaysAfterInitiation": 1
+      }
+    }
+  ]
+}

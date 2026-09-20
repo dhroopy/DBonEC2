@@ -1,0 +1,16 @@
+[Unit]
+Description=Verify latest MySQL backup from S3
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/mysql-server
+EnvironmentFile=/opt/mysql-server/.env
+Environment=TZ=Asia/Kolkata
+ExecStart=/opt/mysql-server/scripts/verify-backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+StandardOutput=append:/opt/mysql-server/logs/verify-backup.log
+StandardError=append:/opt/mysql-server/logs/verify-backup.log
