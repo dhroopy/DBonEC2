@@ -72,14 +72,72 @@ log "Installing packages"
 apt-get update -y
 apt-get install -y ca-certificates curl gnupg unzip jq zstd awscli rsync openssl
 
-if ! command -v docker >/dev/null 2>&1; then
-  log "Installing Docker"
-  curl -fsSL https://get.docker.com | sh
-else
-  log "Docker already installed"
-fi
+install_docker_apt_repo() {
+  local arch codename
+  arch="$(dpkg --print-architecture)"
+  codename="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")"
+  [[ -n "$codename" ]] || die "could not detect Ubuntu codename"
+  install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  chmod a+r /etc/apt/keyrings/docker.asc
+  echo "deb [arch=${arch} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${codename} stable" \
+    > /etc/apt/sources.list.d/docker.list
+  apt-get update -y
+}
 
-docker compose version >/dev/null || die "docker compose plugin is missing"
+install_compose_plugin() {
+  log "Installing Docker Compose plugin"
+  if ! apt-cache show docker-compose-plugin >/dev/null 2>&1; then
+    install_docker_apt_repo
+  fi
+  if apt-cache show docker-compose-plugin >/dev/null 2>&1; then
+    apt-get install -y docker-compose-plugin
+    return 0
+  fi
+  if apt-cache show docker-compose-v2 >/dev/null 2>&1; then
+    apt-get install -y docker-compose-v2
+    return 0
+  fi
+  local arch plugin_dir dest url
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64) arch=x86_64 ;;
+    aarch64|arm64) arch=aarch64 ;;
+    *) die "unsupported architecture for Docker Compose: ${arch}" ;;
+  esac
+  plugin_dir="/usr/libexec/docker/cli-plugins"
+  dest="${plugin_dir}/docker-compose"
+  url="https://github.com/docker/compose/releases/latest/download/docker-compose-linux-${arch}"
+  mkdir -p "$plugin_dir"
+  log "Downloading ${url}"
+  curl -fsSL "$url" -o "$dest"
+  chmod +x "$dest"
+}
+
+ensure_docker() {
+  if ! command -v docker >/dev/null 2>&1; then
+    log "Installing Docker Engine"
+    curl -fsSL https://get.docker.com | sh
+  else
+    log "Docker already installed"
+  fi
+
+  systemctl enable --now docker >/dev/null 2>&1 || true
+
+  if ! docker compose version >/dev/null 2>&1; then
+    install_compose_plugin
+  fi
+
+  systemctl enable --now docker >/dev/null 2>&1 || true
+
+  local compose_out=""
+  if ! compose_out="$(docker compose version 2>&1)"; then
+    die "docker compose plugin is missing (${compose_out})"
+  fi
+  log "${compose_out}"
+}
+
+ensure_docker
 
 if [[ -n "${SUDO_USER:-}" && "$SUDO_USER" != "root" ]]; then
   usermod -aG docker "$SUDO_USER" || true

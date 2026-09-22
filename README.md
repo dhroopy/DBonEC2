@@ -76,7 +76,7 @@ sudo ./install.sh --s3-bucket YOUR_BUCKET_NAME
 
 The installer:
 
-- Installs Docker, awscli, jq, zstd
+- Installs Docker (with the Compose v2 plugin), awscli, jq, zstd
 - Mounts the extra EBS volume at `/mnt/mysql-data` (prompts before `mkfs`; refuses the root disk)
 - Generates `.env` and `secrets/*.cnf`
 - Starts `mysql:8.4`, waits until healthy, confirms binary logging
