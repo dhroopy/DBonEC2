@@ -9,13 +9,15 @@ Two machines, two scripts. Do not mix them up.
 
 `install.sh` exits immediately on macOS. You always SSH into Ubuntu and run it there.
 
+Create the EC2 IAM role in the console before launch: **[iam.md](iam.md)**.
+
 ```text
 Your Mac                         AWS                         EC2 (Ubuntu)
 ───────                          ───                         ────────────
-Create EC2 + disk + SGs  ───►    instance + EBS + SGs
+Create IAM role + profile ──►    mysql-backup-ec2-role
+Create EC2 + disk + SGs  ───►    instance (role attached) + EBS
 clone this repo
-bootstrap-s3-iam.sh      ───►    S3 bucket + IAM role
-                                 + instance profile
+bootstrap-s3-iam.sh      ───►    S3 bucket (IAM reused if it exists)
 SSH into the instance  ─────────────────────────────────►  clone this repo
                                                            sudo ./install.sh
                                                      ──►   Docker + MySQL + timers
@@ -45,7 +47,7 @@ Recommended region: `ap-south-1`.
 | Key pair | So you can SSH from your Mac |
 | Root disk | Default is fine |
 | Extra disk | **30 GB gp3 EBS**, attached **before** `install.sh` (shows up as `/dev/nvme1n1` on Nitro) |
-| IAM instance profile at launch | Leave empty if you have not run bootstrap yet; or pick `mysql-backup-instance-profile` if you already have |
+| IAM instance profile at launch | Create first ([docs/iam.md](iam.md)), then select `mysql-backup-ec2-role` / `mysql-backup-instance-profile` |
 
 Put the instance in a **private** subnet if you can. If it is public, still do not open MySQL to the internet.
 
@@ -60,9 +62,24 @@ Create a dedicated SG (for example `sg-mysql`) with:
 | Outbound | 443 (HTTPS) | `0.0.0.0/0` or the VPC prefix list for S3 | **You** — needed for apt, Docker Hub, and S3 |
 | Outbound | 80 | Optional, for apt HTTP redirects | **You** |
 
+### IAM role and instance profile
+
+Create these in the console **before** launch so the instance can write backups without access keys. Full steps and the JSON policy: **[iam.md](iam.md)**.
+
+| Setting | Value |
+| --- | --- |
+| Trusted entity | EC2 (`ec2.amazonaws.com`) |
+| Role name | `mysql-backup-ec2-role` |
+| Instance profile | `mysql-backup-instance-profile` (or the profile AWS creates with the role) |
+| Permissions | **Custom policy only** — get/put on `s3://YOUR_BUCKET_NAME/mysql/*`. No AWS managed policies. No `s3:DeleteObject`. |
+
+Pick the bucket name first (the policy can exist before the bucket). Attach the profile when you launch the instance.
+
+If you would rather not click through IAM, `./infra/bootstrap-s3-iam.sh` creates the same role. It is safe to run after you already created it.
+
 ### Do **not** create these by hand
 
-S3 bucket, IAM role, instance profile, IAM policy, Docker, MySQL, passwords, systemd timers. The scripts below create those.
+Docker, MySQL, generated passwords, and systemd timers. `install.sh` creates those on the instance. The S3 bucket can be created in the console or by bootstrap.
 
 ### Optional (only if you are migrating)
 
@@ -80,7 +97,7 @@ Needs AWS CLI + `jq` and **admin** credentials (IAM + S3 + optional EC2). Idempo
 | --- | --- | --- |
 | S3 bucket | whatever you pass as `--bucket` | Private, Block Public Access, versioning, SSE-S3 |
 | Lifecycle rules | on that bucket | Expire `mysql/full/` and `mysql/binlogs/` after 14 days |
-| IAM role | `mysql-backup-ec2-role` | Trusts `ec2.amazonaws.com` |
+| IAM role | `mysql-backup-ec2-role` | Reused if you already created it ([iam.md](iam.md)); otherwise created here |
 | Inline IAM policy | `mysql-backup-s3` | `s3:GetObject` + `s3:PutObject` on `mysql/*` only. **No `s3:DeleteObject`.** No access keys. |
 | Instance profile | `mysql-backup-instance-profile` | Wraps the role so EC2 can assume it |
 
@@ -124,7 +141,7 @@ aws sts get-caller-identity
 
 ### A1. Create the EC2 resources
 
-In the AWS console, create the instance, extra 30 GB volume, key pair, and security groups from [section 1](#1-what-you-create-yourself-before-any-script). Note:
+In the AWS console, create the IAM role ([iam.md](iam.md)), then the instance (with that profile attached), extra 30 GB volume, key pair, and security groups from [section 1](#1-what-you-create-yourself-before-any-script). Note:
 
 - instance id (`i-…`)
 - MySQL SG id (`sg-…`)
@@ -201,7 +218,7 @@ Application login: user `appuser`, password `MYSQL_PASSWORD` in `/opt/mysql-serv
 
 Use this if you opened a console session (SSH, SSM, or EC2 Instance Connect) and want to work only there.
 
-**Still create the instance, extra EBS, and security groups yourself first** (section 1). `install.sh` does not launch EC2.
+**Still create the IAM role, instance, extra EBS, and security groups yourself first** (section 1 and [iam.md](iam.md)). `install.sh` does not launch EC2.
 
 ### B1. Bootstrap S3 + IAM — still from a machine with admin AWS credentials
 

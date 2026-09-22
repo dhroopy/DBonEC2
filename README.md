@@ -2,9 +2,9 @@
 
 Production-style MySQL 8.4 for a small workload on a Graviton `t4g.small`: Docker Compose, data on EBS, daily compressed backups, binary-log archiving for point-in-time recovery, and an RDS migration path.
 
-**Start here:** [docs/deploy.md](docs/deploy.md) — what you create in AWS vs what the scripts create, and which steps run on your Mac vs on the EC2 instance.
+**Start here:** [docs/deploy.md](docs/deploy.md) — what you create in AWS vs what the scripts create, and which steps run on your Mac vs on the EC2 instance. Create the instance IAM role first: [docs/iam.md](docs/iam.md).
 
-You create the EC2 instance. A laptop script creates S3 + IAM. `sudo ./install.sh` on the instance starts MySQL.
+You create the EC2 instance and (recommended) the IAM instance role. A laptop script creates S3 and can create or reuse IAM. `sudo ./install.sh` on the instance starts MySQL.
 
 ## What you create
 
@@ -16,8 +16,9 @@ You create the EC2 instance. A laptop script creates S3 + IAM. `sudo ./install.s
 | Root disk | default |
 | Data disk | extra **30 GB gp3** EBS |
 | Network | same VPC as the app; **do not** put 3306 on `0.0.0.0/0` |
+| IAM | EC2 role `mysql-backup-ec2-role` — custom S3 get/put on `mysql/*` only. See [docs/iam.md](docs/iam.md). |
 
-Attach the extra volume before running `install.sh`. Place the instance where the app can reach it privately.
+Attach the extra volume and the instance profile before running `install.sh`. Place the instance where the app can reach it privately.
 
 ## Layout
 
@@ -60,11 +61,11 @@ It creates:
 
 - Private S3 bucket (Block Public Access, versioning, SSE-S3)
 - 14-day lifecycle on `mysql/full/` and `mysql/binlogs/`
-- IAM role + instance profile with get/put on `mysql/*` only (no access keys)
+- IAM role + instance profile with get/put on `mysql/*` only (no access keys), or reuse the role you created in [docs/iam.md](docs/iam.md)
 
 Then:
 
-1. Attach instance profile `mysql-backup-instance-profile` if you did not pass `--instance-id`.
+1. Attach instance profile `mysql-backup-instance-profile` if you did not pass `--instance-id` and did not select it at launch.
 2. Inbound TCP **3306** on the MySQL SG from the **application SG only**.
 3. Outbound HTTPS from the instance to S3.
 
