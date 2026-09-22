@@ -2,6 +2,8 @@
 
 Production-style MySQL 8.4 for a small workload on a Graviton `t4g.small`: Docker Compose, data on EBS, daily compressed backups, binary-log archiving for point-in-time recovery, and an RDS migration path.
 
+**Start here:** [docs/deploy.md](docs/deploy.md) — what you create in AWS vs what the scripts create, and which steps run on your Mac vs on the EC2 instance.
+
 You create the EC2 instance. A laptop script creates S3 + IAM. `sudo ./install.sh` on the instance starts MySQL.
 
 ## What you create
