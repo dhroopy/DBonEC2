@@ -9,7 +9,7 @@ Two machines, two scripts. Do not mix them up.
 
 `install.sh` exits immediately on macOS. You always SSH into Ubuntu and run it there.
 
-Create the EC2 IAM role in the console before launch: **[iam.md](iam.md)**.
+IAM: laptop user (access keys) to run bootstrap, and EC2 instance role for backups — **[iam.md](iam.md)**.
 
 ```text
 Your Mac                         AWS                         EC2 (Ubuntu)
@@ -75,7 +75,7 @@ Create these in the console **before** launch so the instance can write backups 
 
 Pick the bucket name first (the policy can exist before the bucket). Attach the profile when you launch the instance.
 
-If you would rather not click through IAM, `./infra/bootstrap-s3-iam.sh` creates the same role. It is safe to run after you already created it.
+If you would rather not click through the instance role, `./infra/bootstrap-s3-iam.sh` creates it. That script still needs a **laptop IAM user with access keys** ([iam.md, section 2](iam.md#2-laptop-bootstrap-user-access-keys-on-your-mac)). It is safe to run after you already created the instance role.
 
 ### Do **not** create these by hand
 
@@ -91,7 +91,7 @@ An existing RDS instance that this EC2 can reach. Keep it running until cutover 
 
 ### Laptop: `infra/bootstrap-s3-iam.sh`
 
-Needs AWS CLI + `jq` and **admin** credentials (IAM + S3 + optional EC2). Idempotent.
+Needs AWS CLI + `jq` and the **laptop bootstrap user** (access keys). Policy: [iam.md, section 2](iam.md#2-laptop-bootstrap-user-access-keys-on-your-mac). Idempotent.
 
 | Created | Default name | Details |
 | --- | --- | --- |
@@ -126,17 +126,15 @@ Run as root on Ubuntu. Safe to re-run. Does **not** overwrite an existing `.env`
 
 You use the Mac for AWS admin work and SSH. MySQL is installed **on the instance**.
 
-### A0. One-time tools on the Mac
+### A0. One-time tools and IAM user on the Mac
+
+1. Create IAM user `mysql-infra-bootstrap` and an access key. Attach the custom policy in [iam.md, section 2](iam.md#2-laptop-bootstrap-user-access-keys-on-your-mac) (or use an existing admin/SSO login).
+2. Install CLI tools and store the keys in a named profile (not on EC2):
 
 ```bash
 brew install awscli jq
-aws configure   # admin user/role; region ap-south-1
-```
-
-Confirm:
-
-```bash
-aws sts get-caller-identity
+aws configure --profile mysql-infra-bootstrap   # region ap-south-1
+aws sts get-caller-identity --profile mysql-infra-bootstrap
 ```
 
 ### A1. Create the EC2 resources
@@ -156,7 +154,7 @@ Attach the extra volume now. Do not wait until after install.
 git clone <this-repo-url>
 cd DBonEC2
 
-./infra/bootstrap-s3-iam.sh \
+AWS_PROFILE=mysql-infra-bootstrap ./infra/bootstrap-s3-iam.sh \
   --bucket YOUR_BUCKET_NAME \
   --region ap-south-1 \
   --instance-id i-xxxxxxxx \
@@ -220,12 +218,12 @@ Use this if you opened a console session (SSH, SSM, or EC2 Instance Connect) and
 
 **Still create the IAM role, instance, extra EBS, and security groups yourself first** (section 1 and [iam.md](iam.md)). `install.sh` does not launch EC2.
 
-### B1. Bootstrap S3 + IAM — still from a machine with admin AWS credentials
+### B1. Bootstrap S3 + IAM — still from the Mac
 
-A fresh Ubuntu instance cannot create IAM roles or buckets. Run bootstrap on your Mac (Path A2), **or** from any admin shell:
+A fresh Ubuntu instance cannot create IAM roles or buckets. Run bootstrap on your Mac (Path A2) with the laptop user from [iam.md, section 2](iam.md#2-laptop-bootstrap-user-access-keys-on-your-mac):
 
 ```bash
-./infra/bootstrap-s3-iam.sh \
+AWS_PROFILE=mysql-infra-bootstrap ./infra/bootstrap-s3-iam.sh \
   --bucket YOUR_BUCKET_NAME \
   --region ap-south-1 \
   --instance-id i-xxxxxxxx \
@@ -233,7 +231,7 @@ A fresh Ubuntu instance cannot create IAM roles or buckets. Run bootstrap on you
   --app-sg sg-app
 ```
 
-Do not put long-lived AWS access keys on the MySQL instance so you can run bootstrap there. Attach `mysql-backup-instance-profile` instead; that role is only allowed to read/write backup objects, not to create IAM.
+Do not put those access keys on the MySQL instance. Attach `mysql-backup-instance-profile` instead; that role can only read/write backup objects, not create IAM.
 
 ### B2. On the EC2 — clone and install
 

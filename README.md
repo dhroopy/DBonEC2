@@ -2,7 +2,7 @@
 
 Production-style MySQL 8.4 for a small workload on a Graviton `t4g.small`: Docker Compose, data on EBS, daily compressed backups, binary-log archiving for point-in-time recovery, and an RDS migration path.
 
-**Start here:** [docs/deploy.md](docs/deploy.md) — what you create in AWS vs what the scripts create, and which steps run on your Mac vs on the EC2 instance. Create the instance IAM role first: [docs/iam.md](docs/iam.md).
+**Start here:** [docs/deploy.md](docs/deploy.md) — what you create in AWS vs what the scripts create, and which steps run on your Mac vs on the EC2 instance. IAM users and roles: [docs/iam.md](docs/iam.md).
 
 You create the EC2 instance and (recommended) the IAM instance role. A laptop script creates S3 and can create or reuse IAM. `sudo ./install.sh` on the instance starts MySQL.
 
@@ -16,7 +16,8 @@ You create the EC2 instance and (recommended) the IAM instance role. A laptop sc
 | Root disk | default |
 | Data disk | extra **30 GB gp3** EBS |
 | Network | same VPC as the app; **do not** put 3306 on `0.0.0.0/0` |
-| IAM | EC2 role `mysql-backup-ec2-role` — custom S3 get/put on `mysql/*` only. See [docs/iam.md](docs/iam.md). |
+| IAM (EC2) | Role `mysql-backup-ec2-role` — S3 get/put on `mysql/*` only |
+| IAM (laptop) | User `mysql-infra-bootstrap` + access keys — to run `bootstrap-s3-iam.sh`. See [docs/iam.md](docs/iam.md). |
 
 Attach the extra volume and the instance profile before running `install.sh`. Place the instance where the app can reach it privately.
 
@@ -44,10 +45,10 @@ s3://YOUR_BUCKET/
 
 ## Phase 1 — AWS backup infrastructure (laptop)
 
-Needs AWS CLI + `jq` and admin credentials. Does **not** create the EC2 instance.
+Needs AWS CLI + `jq` and the laptop IAM user from [docs/iam.md](docs/iam.md) (access keys on the Mac only). Does **not** create the EC2 instance.
 
 ```bash
-./infra/bootstrap-s3-iam.sh \
+AWS_PROFILE=mysql-infra-bootstrap ./infra/bootstrap-s3-iam.sh \
   --bucket YOUR_BUCKET_NAME \
   --region ap-south-1 \
   --instance-id i-xxxxxxxx \
