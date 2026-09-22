@@ -22,15 +22,9 @@ cleanup() {
 trap cleanup EXIT
 
 log "Finding latest full backup"
-LATEST_KEY="$(
-  aws s3api list-objects-v2 \
-    --bucket "$S3_BUCKET" \
-    --prefix "${S3_PREFIX}/full/" \
-    --region "$AWS_REGION" \
-    --query 'reverse(sort_by(Contents, &LastModified))[0].Key' \
-    --output text
-)"
-[[ -n "$LATEST_KEY" && "$LATEST_KEY" != "None" ]] || die "no full backups found under s3://${S3_BUCKET}/${S3_PREFIX}/full/"
+if ! LATEST_KEY="$(s3_latest_key "${S3_PREFIX}/full/" ".sql.zst")"; then
+  die "no full backups found under s3://${S3_BUCKET}/${S3_PREFIX}/full/"
+fi
 
 log "Latest backup: s3://${S3_BUCKET}/${LATEST_KEY}"
 aws s3 cp "s3://${S3_BUCKET}/${LATEST_KEY}" "$TEMP/backup.sql.zst" --region "$AWS_REGION"

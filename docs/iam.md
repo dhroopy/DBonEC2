@@ -214,3 +214,15 @@ AWS_PROFILE=mysql-infra-bootstrap ./infra/bootstrap-s3-iam.sh \
 ```
 
 After bootstrap succeeds, you can deactivate or delete this access key. The EC2 instance does not use it; backups use the instance role from [section 1](#1-ec2-instance-role).
+
+### If CreateBucket returns AccessDenied
+
+The access key is fine. The policy **Resource** ARN does not match `--bucket`.
+
+`s3:CreateBucket` is allowed only on `arn:aws:s3:::YOUR_BUCKET_NAME`. If that string is still the placeholder, or an old name like `db_bkp`, AWS denies `db-bkp`.
+
+1. Sign in as an **account admin** (this user cannot edit its own policy).
+2. IAM → Users → `mysql-infra-bootstrap` → Permissions → open the attached policy.
+3. Set the S3 `Resource` to the exact bucket you will pass, for example `arn:aws:s3:::db-bkp`.
+4. If you already created `mysql-backup-ec2-role`, update its S3 ARNs to the same name.
+5. Re-run bootstrap. No new access key is needed.

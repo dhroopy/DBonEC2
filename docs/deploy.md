@@ -144,7 +144,7 @@ In the AWS console, create the IAM role ([iam.md](iam.md)), then the instance (w
 - instance id (`i-…`)
 - MySQL SG id (`sg-…`)
 - app SG id (`sg-…`)
-- a **globally unique** S3 bucket name (for example `yourorg-mysql-backups-ap-south-1`)
+- a **globally unique** S3 bucket name: 3–63 chars, lowercase letters, numbers, hyphens only (no underscores). Example: `yourorg-mysql-backups-ap-south-1`
 
 Attach the extra volume now. Do not wait until after install.
 

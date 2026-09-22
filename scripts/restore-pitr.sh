@@ -81,12 +81,7 @@ docker exec -i "$MYSQL_CONTAINER" \
 log "Listing archived binlogs at or after ${BINLOG_FILE}"
 mkdir -p "$TEMP/binlogs"
 mapfile -t KEYS < <(
-  aws s3api list-objects-v2 \
-    --bucket "$S3_BUCKET" \
-    --prefix "${S3_PREFIX}/binlogs/" \
-    --region "$AWS_REGION" \
-    --query 'Contents[].Key' \
-    --output text | tr '\t' '\n' | sed '/^$/d;/^None$/d' | sort
+  s3_list_keys "${S3_PREFIX}/binlogs/" | sed '/^$/d' | sort
 )
 
 BINLOG_FILES=()

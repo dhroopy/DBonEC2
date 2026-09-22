@@ -70,7 +70,39 @@ export DEBIAN_FRONTEND=noninteractive
 
 log "Installing packages"
 apt-get update -y
-apt-get install -y ca-certificates curl gnupg unzip jq zstd awscli rsync openssl
+apt-get install -y ca-certificates curl gnupg unzip jq zstd rsync openssl
+
+install_awscli() {
+  local zip tmp
+  case "$(uname -m)" in
+    x86_64) zip="awscli-exe-linux-x86_64.zip" ;;
+    aarch64|arm64) zip="awscli-exe-linux-aarch64.zip" ;;
+    *) die "unsupported architecture for AWS CLI: $(uname -m)" ;;
+  esac
+
+  # Apt awscli is v1 and uses system Python. Python 3.14 argparse rejects
+  # unescaped % in help text, which crashes some s3api commands with
+  # "badly formed help string".
+  if dpkg -s awscli >/dev/null 2>&1; then
+    log "Removing apt awscli (v1 / system Python)"
+    apt-get remove -y awscli
+  fi
+
+  tmp="$(mktemp -d)"
+  log "Installing AWS CLI v2 (${zip})"
+  curl -fsSL "https://awscli.amazonaws.com/${zip}" -o "${tmp}/awscliv2.zip"
+  unzip -q "${tmp}/awscliv2.zip" -d "$tmp"
+  "${tmp}/aws/install" --update
+  rm -rf "$tmp"
+
+  if [[ -x /usr/local/bin/aws && ! -e /usr/bin/aws ]]; then
+    ln -s /usr/local/bin/aws /usr/bin/aws
+  fi
+  command -v aws >/dev/null 2>&1 || die "AWS CLI install did not put aws on PATH"
+  log "$(aws --version 2>&1)"
+}
+
+install_awscli
 
 install_docker_apt_repo() {
   local arch codename

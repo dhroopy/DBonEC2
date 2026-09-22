@@ -53,6 +53,15 @@ if [[ -z "$BUCKET" ]]; then
   exit 1
 fi
 
+# S3 DNS names: 3–63 chars, lowercase letters/numbers/hyphens, start and end alphanumeric.
+# Underscores (db_bkp), uppercase, and spaces are rejected by CreateBucket as InvalidBucketName.
+if [[ ! "$BUCKET" =~ ^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$ ]]; then
+  echo "ERROR: invalid S3 bucket name: ${BUCKET}" >&2
+  echo "       Use 3–63 characters: lowercase letters, numbers, and hyphens only." >&2
+  echo "       Example: yourorg-mysql-backups-ap-south-1" >&2
+  exit 1
+fi
+
 for cmd in aws jq; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "ERROR: $cmd is required on this machine" >&2

@@ -51,6 +51,8 @@ load_env() {
   AWS_REGION="${AWS_REGION:-ap-south-1}"
   TZ="${TZ:-Asia/Kolkata}"
   export TZ
+  # AWS CLI v2 pages output into `less` unless this is empty.
+  export AWS_PAGER=""
 }
 
 mysql_exec() {
@@ -90,4 +92,41 @@ s3_head_ok() {
     --bucket "$S3_BUCKET" \
     --key "${uri#s3://${S3_BUCKET}/}" \
     --region "$AWS_REGION" >/dev/null 2>&1
+}
+
+# List object keys under a prefix using `aws s3 ls` (not s3api list-objects-v2).
+# Apt awscli v1 on Python 3.14 crashes list-objects-v2 with "badly formed help string".
+s3_list_keys() {
+  local prefix="$1"
+  aws s3 ls "s3://${S3_BUCKET}/${prefix}" --recursive --region "$AWS_REGION" \
+    | awk 'NF >= 4 {
+        k = $4
+        for (i = 5; i <= NF; i++) k = k " " $i
+        print k
+      }'
+}
+
+# Print the newest object key under prefix, optionally ending with suffix (e.g. .sql.zst).
+s3_latest_key() {
+  local prefix="$1"
+  local suffix="${2:-}"
+  local listing key
+  listing="$(aws s3 ls "s3://${S3_BUCKET}/${prefix}" --recursive --region "$AWS_REGION")"
+  key="$(
+    printf '%s\n' "$listing" \
+      | awk -v suffix="$suffix" '
+          NF >= 4 {
+            k = $4
+            for (i = 5; i <= NF; i++) k = k " " $i
+            if (suffix == "" || substr(k, length(k) - length(suffix) + 1) == suffix) {
+              print $1 " " $2 "\t" k
+            }
+          }
+        ' \
+      | sort \
+      | tail -n 1 \
+      | cut -f2-
+  )"
+  [[ -n "$key" && "$key" != "None" ]] || return 1
+  printf '%s\n' "$key"
 }
