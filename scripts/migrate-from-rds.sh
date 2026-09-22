@@ -17,8 +17,13 @@ Usage:
   migrate-from-rds.sh --host HOST --user USER [--password PASS] [--port 3306]
                       [--databases db1,db2]
 
-If --databases is omitted, all non-system schemas on RDS are dumped.
-Do not use this to copy RDS mysql.* system tables onto EC2.
+--databases is a comma-separated list of schema names. Shell globs work:
+  --databases '9930pa*,consign*'
+
+`*` matches any length, `?` matches one character. SQL-style `%` is accepted
+as an alias for `*`. If --databases is omitted, all non-system schemas on
+RDS are dumped. System schemas (mysql, sys, information_schema,
+performance_schema) are never included.
 EOF
 }
 
@@ -66,18 +71,59 @@ mysql_rds() {
     mysql --defaults-extra-file=/run/rds.cnf "$@"
 }
 
+SYSTEM_DBS_RE='^(information_schema|performance_schema|mysql|sys)$'
+
+list_rds_databases() {
+  mysql_rds -N -e "SHOW DATABASES;" \
+    | grep -vE "$SYSTEM_DBS_RE" \
+    | sed '/^$/d'
+}
+
+# Expand comma-separated names/globs against schemas on RDS. Unquoted glob on
+# the right of [[ == ]] is intentional so * and ? match.
+resolve_databases() {
+  local patterns_csv="$1"
+  local -a all=() selected=()
+  local -A seen=()
+  local pat glob db matched
+
+  mapfile -t all < <(list_rds_databases)
+  [[ ${#all[@]} -gt 0 ]] || die "no non-system databases on RDS"
+
+  if [[ -z "$patterns_csv" ]]; then
+    printf '%s\n' "${all[@]}"
+    return
+  fi
+
+  patterns_csv="${patterns_csv// /}"
+  local -a pats=()
+  IFS=',' read -r -a pats <<<"$patterns_csv"
+
+  for pat in "${pats[@]}"; do
+    [[ -n "$pat" ]] || continue
+    glob="${pat//%/*}"
+    matched=0
+    for db in "${all[@]}"; do
+      # shellcheck disable=SC2254
+      if [[ "$db" == $glob ]]; then
+        if [[ -z "${seen[$db]:-}" ]]; then
+          selected+=("$db")
+          seen[$db]=1
+        fi
+        matched=1
+      fi
+    done
+    [[ "$matched" -eq 1 ]] || die "no RDS databases matched: ${pat}"
+  done
+
+  [[ ${#selected[@]} -gt 0 ]] || die "no databases to migrate"
+  printf '%s\n' "${selected[@]}"
+}
+
 log "Discovering databases on ${RDS_HOST}"
-if [[ -z "$DATABASES_CSV" ]]; then
-  DATABASES_CSV="$(
-    mysql_rds -N -e "SHOW DATABASES;" \
-      | grep -vE '^(information_schema|performance_schema|mysql|sys)$' \
-      | paste -sd, -
-  )"
-fi
-DATABASES_CSV="${DATABASES_CSV// /}"
-[[ -n "$DATABASES_CSV" ]] || die "no databases to migrate"
-IFS=',' read -r -a DBS <<<"$DATABASES_CSV"
-log "Will migrate: ${DBS[*]}"
+mapfile -t DBS < <(resolve_databases "$DATABASES_CSV")
+[[ ${#DBS[@]} -gt 0 ]] || die "no databases to migrate"
+log "Will migrate (${#DBS[@]}): ${DBS[*]}"
 
 log "Dumping RDS (gtid-purged=OFF) to ${DUMP_ZST}"
 docker run --rm \
