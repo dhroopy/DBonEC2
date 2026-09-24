@@ -131,17 +131,30 @@ journalctl -u mysql-backup-full.service -n 50
 
 Logs also append under `/opt/mysql-server/logs/`.
 
-Restore onto **this** container is destructive and requires typing `RESTORE`:
+Both restore scripts replace every database on the running container. Run them from an interactive terminal on the instance (they refuse a non-TTY shell) and type `RESTORE` when prompted. Stop application writers first. Prefer a temporary EC2 for drills; see [docs/cutover.md](docs/cutover.md).
+
+List dumps:
 
 ```bash
-sudo /opt/mysql-server/scripts/restore.sh s3://YOUR_BUCKET/mysql/full/2026/09/mysql-full-....sql.zst
+aws s3 ls s3://YOUR_BUCKET/mysql/full/ --recursive
+```
 
+Full restore of one dump. In the same MySQL session as the import, the script runs `RESET BINARY LOGS AND GTIDS` so `GTID_PURGED` from a backup of this server can be applied:
+
+```bash
+sudo /opt/mysql-server/scripts/restore.sh \
+  s3://YOUR_BUCKET/mysql/full/2026/09/mysql-full-YYYY-MM-DD_HH-MM-SS.sql.zst
+```
+
+Point-in-time restore loads that full backup, then replays archived binlogs from the backup's binlog file and position until `--stop-datetime`. The timestamp uses the server timezone (`Asia/Kolkata`, `+05:30`). The script reads `s3://YOUR_BUCKET/mysql/manifests/<backup-name>.json` unless you pass `--manifest`.
+
+```bash
 sudo /opt/mysql-server/scripts/restore-pitr.sh \
-  --backup s3://YOUR_BUCKET/mysql/full/2026/09/mysql-full-....sql.zst \
+  --backup s3://YOUR_BUCKET/mysql/full/2026/09/mysql-full-YYYY-MM-DD_HH-MM-SS.sql.zst \
   --stop-datetime "2026-09-18 11:19:59"
 ```
 
-Prefer a temporary EC2 for restore drills. See [docs/cutover.md](docs/cutover.md).
+Either restore deletes this instance's binary logs and GTID history. Take a new full backup before you rely on point-in-time recovery again.
 
 ## Phase 4 — RDS migration
 
