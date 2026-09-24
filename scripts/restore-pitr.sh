@@ -75,8 +75,12 @@ BINLOG_POS="$(jq -r '.binlog_position' "$TEMP/manifest.json")"
 log "Restoring full backup ${BACKUP_URI}"
 aws s3 cp "$BACKUP_URI" "$TEMP/backup.sql.zst" --region "$AWS_REGION"
 zstd -d "$TEMP/backup.sql.zst" -o "$TEMP/backup.sql"
-docker exec -i "$MYSQL_CONTAINER" \
-  mysql --defaults-extra-file="$ROOT_CNF" < "$TEMP/backup.sql"
+log "Clearing binary logs and GTID history so GTID_PURGED from the dump can be applied"
+{
+  echo "RESET BINARY LOGS AND GTIDS;"
+  cat "$TEMP/backup.sql"
+} | docker exec -i "$MYSQL_CONTAINER" \
+  mysql --defaults-extra-file="$ROOT_CNF"
 
 log "Listing archived binlogs at or after ${BINLOG_FILE}"
 mkdir -p "$TEMP/binlogs"

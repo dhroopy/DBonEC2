@@ -40,7 +40,13 @@ else
 fi
 
 log "Restoring into ${MYSQL_CONTAINER}"
-docker exec -i "$MYSQL_CONTAINER" \
-  mysql --defaults-extra-file="$ROOT_CNF" < "$TEMP/backup.sql"
+log "Clearing binary logs and GTID history so GTID_PURGED from the dump can be applied"
+# Same session as the import. A separate RESET can race with new transactions
+# and recreate the overlap error (3546).
+{
+  echo "RESET BINARY LOGS AND GTIDS;"
+  cat "$TEMP/backup.sql"
+} | docker exec -i "$MYSQL_CONTAINER" \
+  mysql --defaults-extra-file="$ROOT_CNF"
 
 log "Restore completed"
