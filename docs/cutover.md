@@ -2,6 +2,8 @@
 
 Keep the RDS instance running until the EC2 server, backups, and application are proven. Do not delete RDS in the same window as the cutover.
 
+Command flags for `preflight-rds.sh` and `migrate-from-rds.sh` (password prompt, `--databases` globs, where the dump is kept): [scripts.md](scripts.md).
+
 ## Before cutover
 
 - [ ] EC2 MySQL is healthy (`/opt/mysql-server/scripts/health-check.sh`)

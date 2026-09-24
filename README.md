@@ -2,7 +2,7 @@
 
 Production-style MySQL 8.4 for a small workload on a Graviton `t4g.small`: Docker Compose, data on EBS, daily compressed backups, binary-log archiving for point-in-time recovery, and an RDS migration path.
 
-**Start here:** [docs/deploy.md](docs/deploy.md) — what you create in AWS vs what the scripts create, and which steps run on your Mac vs on the EC2 instance. IAM users and roles: [docs/iam.md](docs/iam.md).
+**Start here:** [docs/deploy.md](docs/deploy.md) — what you create in AWS vs what the scripts create, and which steps run on your Mac vs on the EC2 instance. IAM users and roles: [docs/iam.md](docs/iam.md). How to run each script: [docs/scripts.md](docs/scripts.md).
 
 You create the EC2 instance and (recommended) the IAM instance role. A laptop script creates S3 and can create or reuse IAM. `sudo ./install.sh` on the instance starts MySQL.
 
@@ -114,13 +114,16 @@ Application login is `appuser` / `MYSQL_PASSWORD` from `/opt/mysql-server/.env`.
 
 ## Phase 3 — Prove backups before cutover
 
+None of these take arguments. Flags, S3 paths, and what each script writes are in [docs/scripts.md](docs/scripts.md).
+
 ```bash
-sudo /opt/mysql-server/scripts/backup-full.sh
-sudo /opt/mysql-server/scripts/archive-binlogs.sh
-sudo /opt/mysql-server/scripts/verify-backup.sh
+sudo /opt/mysql-server/scripts/health-check.sh      # ping; exits 1 if MySQL is down
+sudo /opt/mysql-server/scripts/backup-full.sh       # dump every database to S3 + manifest
+sudo /opt/mysql-server/scripts/archive-binlogs.sh   # upload completed binlogs only
+sudo /opt/mysql-server/scripts/verify-backup.sh     # restore the latest dump into a throwaway container
 ```
 
-`verify-backup.sh` restores the latest S3 dump into a throwaway container (128M buffer pool) and runs `SHOW DATABASES` plus table counts. On a 2 GB instance this can be tight while production MySQL is running; run it when load is low.
+`verify-backup.sh` does not touch the production datadir. It uses a 128M buffer pool and runs `SHOW DATABASES` plus table counts. On a 2 GB instance this can be tight while production MySQL is running; run it when load is low.
 
 Timers:
 
@@ -131,7 +134,7 @@ journalctl -u mysql-backup-full.service -n 50
 
 Logs also append under `/opt/mysql-server/logs/`.
 
-Both restore scripts replace every database on the running container. Run them from an interactive terminal on the instance (they refuse a non-TTY shell) and type `RESTORE` when prompted. Stop application writers first. Prefer a temporary EC2 for drills; see [docs/cutover.md](docs/cutover.md).
+Both restore scripts replace every database on the running container. Run them from an interactive terminal on the instance (they refuse a non-TTY shell) and type `RESTORE` when prompted. Stop application writers first. Prefer a temporary EC2 for drills; see [docs/cutover.md](docs/cutover.md). If `MYSQL_BACKUP_PASSWORD` in `.env` changes, re-run `sudo /opt/mysql-server/scripts/init-backup-user.sh` so dumps and binlog flushes keep working.
 
 List dumps:
 
@@ -158,9 +161,15 @@ Either restore deletes this instance's binary logs and GTID history. Take a new 
 
 ## Phase 4 — RDS migration
 
+Run both on the instance. Each prompts for the RDS password (or use `RDS_PASSWORD` for that command). `preflight-rds.sh` only prints version, charset, and schema sizes. `migrate-from-rds.sh` loads schemas into this server; `--databases` limits which ones, and omitting it dumps every non-system schema. Details: [docs/scripts.md](docs/scripts.md).
+
 ```bash
-/opt/mysql-server/scripts/preflight-rds.sh --host YOUR_RDS_ENDPOINT --user YOUR_USER
-/opt/mysql-server/scripts/migrate-from-rds.sh --host YOUR_RDS_ENDPOINT --user YOUR_USER
+sudo /opt/mysql-server/scripts/preflight-rds.sh \
+  --host YOUR_RDS_ENDPOINT --user YOUR_USER
+
+sudo /opt/mysql-server/scripts/migrate-from-rds.sh \
+  --host YOUR_RDS_ENDPOINT --user YOUR_USER \
+  --databases 'db1,db2'
 ```
 
 Then point the app at the EC2 private IP and **keep RDS** until backups and the app look right. Full checklist: [docs/cutover.md](docs/cutover.md).

@@ -266,4 +266,4 @@ sudo ./install.sh --s3-bucket YOUR_BUCKET_NAME
 
 Do not expose 3306 to `0.0.0.0/0`. Do not put `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` in `.env`.
 
-RDS migration checklist: [cutover.md](cutover.md).
+What each script does, its flags, and how to run it by hand: [scripts.md](scripts.md). RDS migration checklist: [cutover.md](cutover.md).
